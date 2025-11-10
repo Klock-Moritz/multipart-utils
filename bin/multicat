@@ -1,0 +1,15 @@
+#! /usr/bin/env sh
+uuid=$(uuidgen);
+
+printf "Mime-Version: 1.0\nContent-Type: multipart/mixed; boundary=$uuid\n\n"
+
+for file in "$@"
+do
+  type=$(mimetype --brief "$file");
+  name=$(basename "$file");
+
+  printf -- "--$uuid\nContent-Type: $type\nContent-Disposition: attachment; filename=\"$name\"\n\n";
+  cat "$file";
+done
+
+printf -- "--$uuid--\n";
