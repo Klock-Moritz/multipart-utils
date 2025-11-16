@@ -1,62 +1,93 @@
 #! /usr/bin/env sh
-OPTS=$(getopt -l boundary:full-path,only-content,help -o b:poh -- "$@")
+set -eu;
 
-if [ $? -ne 0 ]; then
-    printf "Error: invalid options\n" >&2;
-    exit 1;
+PROGNAME="$(basename "$0")";
+
+usage() {
+    printf '%s\n' "Usage: $PROGNAME [OPTIONS] [FILE]..."
+    printf '%s\n' "Options:"
+    printf '%s\n' "  -b, --boundary BOUNDARY   set MIME boundary (default: uuidgen)"
+    printf '%s\n' "  -p, --full-path           use full path as filename in Content-Disposition"
+    printf '%s\n' "  -o, --only-content        print only parts (no top-level MIME headers)"
+    printf '%s\n' "  -h, --help                show this help"
+}
+
+if ! getopt --test >/dev/null 2>&1; then
+    printf 'Error: GNU getopt required\n' >&2; exit 2;
 fi
 
-eval set -- "$OPTS"
+OPTS=$(getopt -o b:poh -l boundary:,full-path,only-content,help -- "$@") || {
+    printf 'Error: invalid options\n' >&2; exit 1;
+}
 
-BOUNDARY=$(uuidgen)
+eval set -- "$OPTS";
 
-while [ true ]; do
+# defaults
+BOUNDARY="";
+FULL_PATH=false;
+ONLY_CONTENT=false;
+
+while :; do
     case "$1" in
-	--boundary|-b)
-	    BOUNDARY="$2";
-	    shift 2;
-	    ;;
-	--full-path|-p)
-	    FULL_PATH="true";
-	    shift;
-	    ;;
-	--only-content|-o)
-	    ONLY_CONTENT="true";
-	    shift;
-	    ;;
-	--help|-h)
-	    printf "multicat [OPTION]... [FILE]...\n";
-	    exit 0;
-	    ;;
-	--)
-	    shift;
-	    break;
-	    ;;
-	*)
-	    printf "Error: unknown Option\n" >&2;
-	    exit 1;
-	    ;;
+        -b|--boundary)
+            BOUNDARY="$2"; shift 2;;
+        -p|--full-path)
+            FULL_PATH=true; shift;;
+        -o|--only-content)
+            ONLY_CONTENT=true; shift;;
+        -h|--help)
+            usage; exit 0;;
+        --) shift; break;;
+        *) printf 'Error: unknown option\n' >&2; exit 1;;
     esac
 done
 
-if [ ! $ONLY_CONTENT ]; then
-    printf "Mime-Version: 1.0\nContent-Type: multipart/mixed; boundary=$BOUNDARY\n\n"
+# ensure boundary
+if [ -z "${BOUNDARY}" ]; then
+    if command -v uuidgen >/dev/null 2>&1; then
+        BOUNDARY="$(uuidgen)"
+    else
+        BOUNDARY="$(cat /proc/sys/kernel/random/uuid)"
+    fi
 fi
 
-for file in "$@"
-do
-  type=$(mimetype --brief "$file");
+if command -v mimetype >/dev/null 2>&1; then
+    USE_MIMETYPE_CMD=true;
+else
+    # fallback to file
+    USE_MIMETYPE_CMD=false;
+fi
 
-  if [ $FULL_PATH ]; then
+if [ "$ONLY_CONTENT" = false ]; then
+    printf 'Mime-Version: 1.0\nContent-Type: multipart/mixed; boundary=%s\n\n' "$BOUNDARY"
+fi
+
+for file in "$@"; do
+	if [ ! -e "$file" ]; then
+			printf 'Warning: file not found: %s\n' "$file" >&2;
+			continue;
+	fi
+	if [ ! -r "$file" ]; then
+			printf 'Warning: file not readable: %s\n' "$file" >&2;
+			continue;
+	fi
+
+	if [ "$USE_MIMETYPE_CMD" = true ]; then
+			type=$(mimetype --brief "$file");
+	else
+			type=$(file --brief --mime-type "$file");
+	fi
+
+  if [ "$FULL_PATH" = true ]; then
       name="$file";
   else
-      name=$(basename "$file");
+      name="$(basename "$file")";
   fi
 
-  printf -- "--$BOUNDARY\nContent-Type: $type\nContent-Disposition: attachment; filename=\"$name\"\n\n";
+  printf -- '--%s\nContent-Type: %s\nContent-Disposition: attachment; filename="%s"\n\n' "$BOUNDARY" "$type" "$name";
   cat "$file";
 done
 
-if [ ! $ONLY_CONTENT ]; then
-    printf -- "--$BOUNDARY--\n";
+if [ "$ONLY_CONTENT" = false ]; then
+    printf -- '--%s--\n' "$BOUNDARY";
 fi
