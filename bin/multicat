@@ -1,15 +1,62 @@
 #! /usr/bin/env sh
-uuid=$(uuidgen);
+OPTS=$(getopt -l boundary:full-path,only-content,help -o b:poh -- "$@")
 
-printf "Mime-Version: 1.0\nContent-Type: multipart/mixed; boundary=$uuid\n\n"
+if [ $? -ne 0 ]; then
+    printf "Error: invalid options\n" >&2;
+    exit 1;
+fi
+
+eval set -- "$OPTS"
+
+BOUNDARY=$(uuidgen)
+
+while [ true ]; do
+    case "$1" in
+	--boundary|-b)
+	    BOUNDARY="$2";
+	    shift 2;
+	    ;;
+	--full-path|-p)
+	    FULL_PATH="true";
+	    shift;
+	    ;;
+	--only-content|-o)
+	    ONLY_CONTENT="true";
+	    shift;
+	    ;;
+	--help|-h)
+	    printf "multicat [OPTION]... [FILE]...\n";
+	    exit 0;
+	    ;;
+	--)
+	    shift;
+	    break;
+	    ;;
+	*)
+	    printf "Error: unknown Option\n" >&2;
+	    exit 1;
+	    ;;
+    esac
+done
+
+if [ ! $ONLY_CONTENT ]; then
+    printf "Mime-Version: 1.0\nContent-Type: multipart/mixed; boundary=$BOUNDARY\n\n"
+fi
 
 for file in "$@"
 do
   type=$(mimetype --brief "$file");
-  name=$(basename "$file");
 
-  printf -- "--$uuid\nContent-Type: $type\nContent-Disposition: attachment; filename=\"$name\"\n\n";
+  if [ $FULL_PATH ]; then
+      name="$file";
+  else
+      name=$(basename "$file");
+  fi
+
+  printf -- "--$BOUNDARY\nContent-Type: $type\nContent-Disposition: attachment; filename=\"$name\"\n\n";
   cat "$file";
 done
 
-printf -- "--$uuid--\n";
+if [ ! $ONLY_CONTENT ]; then
+    printf -- "--$BOUNDARY--\n";
+fi
