@@ -4,7 +4,7 @@ set -eu;
 PROGNAME="$(basename "$0")";
 
 usage() {
-    printf '%s\n' "Usage: $PROGNAME [OPTIONS] [FILE]..."
+    printf '%s\n' "Usage: ${PROGNAME} [OPTIONS] [FILE]..."
     printf '%s\n' "Options:"
     printf '%s\n' "  -b, --boundary BOUNDARY   set MIME boundary (default: uuidgen)"
     printf '%s\n' "  -p, --full-path           use full path as filename in Content-Disposition"
@@ -12,15 +12,11 @@ usage() {
     printf '%s\n' "  -h, --help                show this help"
 }
 
-if ! getopt --test >/dev/null 2>&1; then
-    printf 'Error: GNU getopt required\n' >&2; exit 2;
-fi
-
 OPTS=$(getopt -o b:poh -l boundary:,full-path,only-content,help -- "$@") || {
     printf 'Error: invalid options\n' >&2; exit 1;
 }
 
-eval set -- "$OPTS";
+eval set -- "${OPTS}";
 
 # defaults
 BOUNDARY="";
@@ -58,36 +54,36 @@ else
     USE_MIMETYPE_CMD=false;
 fi
 
-if [ "$ONLY_CONTENT" = false ]; then
-    printf 'Mime-Version: 1.0\nContent-Type: multipart/mixed; boundary=%s\n\n' "$BOUNDARY"
+if [ "${ONLY_CONTENT}" = false ]; then
+    printf 'Mime-Version: 1.0\nContent-Type: multipart/mixed; boundary=%s\n\n' "${BOUNDARY}"
 fi
 
 for file in "$@"; do
-	if [ ! -e "$file" ]; then
-			printf 'Warning: file not found: %s\n' "$file" >&2;
+	if [ ! -e "${file}" ]; then
+			printf 'Warning: file not found: %s\n' "${file}" >&2;
 			continue;
 	fi
-	if [ ! -r "$file" ]; then
-			printf 'Warning: file not readable: %s\n' "$file" >&2;
+	if [ ! -r "${file}" ]; then
+			printf 'Warning: file not readable: %s\n' "${file}" >&2;
 			continue;
 	fi
 
-	if [ "$USE_MIMETYPE_CMD" = true ]; then
-			type=$(mimetype --brief "$file");
+	if [ "${USE_MIMETYPE_CMD}" = true ]; then
+			type=$(mimetype --brief "${file}");
 	else
-			type=$(file --brief --mime-type "$file");
+			type=$(file --brief --mime-type "${file}");
 	fi
 
-  if [ "$FULL_PATH" = true ]; then
-      name="$file";
+  if [ "${FULL_PATH}" = true ]; then
+      name="${file}";
   else
-      name="$(basename "$file")";
+      name="$(basename "${file}")";
   fi
 
-  printf -- '--%s\nContent-Type: %s\nContent-Disposition: attachment; filename="%s"\n\n' "$BOUNDARY" "$type" "$name";
-  cat "$file";
+  printf -- '--%s\nContent-Type: %s\nContent-Disposition: attachment; filename="%s"\n\n' "${BOUNDARY}" "${type}" "${name}";
+  cat "${file}";
 done
 
-if [ "$ONLY_CONTENT" = false ]; then
-    printf -- '--%s--\n' "$BOUNDARY";
+if [ "${ONLY_CONTENT}" = false ]; then
+    printf -- '--%s--\n' "${BOUNDARY}";
 fi
